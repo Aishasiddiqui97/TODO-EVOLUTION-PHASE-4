@@ -1,12 +1,23 @@
 from sqlmodel import SQLModel, Field, Column, DateTime
 from typing import Optional
 from datetime import datetime
+from enum import Enum
 import uuid
 
 
+class TaskPriority(str, Enum):
+    """Task priority levels"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class TaskBase(SQLModel):
-    description: str = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=500)
+    description: Optional[str] = None
     completed: bool = False
+    priority: Optional[TaskPriority] = None
+    due_date: Optional[datetime] = None
     user_id: str = Field(index=True)  # Assuming user_id comes from JWT
 
 
@@ -23,8 +34,11 @@ class TaskRead(TaskBase):
 
 
 class TaskUpdate(SQLModel):
-    description: Optional[str] = Field(default=None, min_length=1)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    description: Optional[str] = None
     completed: Optional[bool] = None
+    priority: Optional[TaskPriority] = None
+    due_date: Optional[datetime] = None
 
 
 class TaskCreate(TaskBase):

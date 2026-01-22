@@ -1,3 +1,4 @@
+# Phase II Dependencies
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlmodel==0.0.22
@@ -7,3 +8,10 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.20
 better-exceptions==0.3.3
 pydantic[email]==2.9.2
+
+# Phase III Dependencies
+openai>=1.0.0
+alembic==1.13.1
+dateparser==1.2.0
+python-dotenv==1.0.0
+asyncpg==0.29.0
