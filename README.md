@@ -1,27 +1,31 @@
-# Evolution of Todo - Phase II
+# Evolution of Todo - Phase III
 
-A full-stack web application for managing tasks with user authentication and persistent storage.
+A supercharged full-stack web application for managing tasks, now featuring an **AI-powered Chatbot** for natural language task management.
 
 ## Features
 
-- **User Authentication**: Secure sign up and sign in with JWT tokens
-- **Todo Management**: Create, read, update, delete, and toggle completion of tasks
-- **User Isolation**: Users can only access their own tasks
-- **Responsive UI**: Works on desktop and mobile devices
-- **Persistent Storage**: Data stored in PostgreSQL database
+- **AI Chatbot**: Manage your tasks through natural conversation using the integrated AI assistant.
+- **MCP Integration**: Uses Model Context Protocol (MCP) to bridge the AI agent with the task database securely.
+- **User Authentication**: Secure sign up and sign in with JWT tokens.
+- **Todo Management**: Create, read, update, delete, and toggle completion of tasks via UI or Chat.
+- **User Isolation**: Users can only access their own tasks and conversation history.
+- **Persistent Storage**: All tasks and chat messages are stored in a PostgreSQL database.
 
 ## Tech Stack
 
 - **Backend**: Python, FastAPI, SQLModel, PostgreSQL
+- **AI Agent**: OpenAI Agents SDK, OpenRouter (Gemini 2.0 Flash)
+- **Protocol**: Model Context Protocol (MCP) for tool execution
 - **Frontend**: Next.js 16+, TypeScript, Tailwind CSS
 - **Authentication**: JWT-based authentication
-- **Database**: PostgreSQL (with Neon for production)
+- **Database**: PostgreSQL (Docker-based local setup)
 
 ## Prerequisites
 
 - Python 3.13+
 - Node.js 18+
-- PostgreSQL (or Docker for local development)
+- Docker (for PostgreSQL)
+- OpenRouter API Key (for Chat features)
 
 ## Setup Instructions
 
@@ -35,7 +39,7 @@ cd backend
 2. Create a virtual environment and activate it:
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+venv\Scripts\activate  # On Linux/macOS: source venv/bin/activate
 ```
 
 3. Install dependencies:
@@ -43,21 +47,22 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Copy the environment example and configure your settings:
+4. Configure environment variables in `backend/.env`:
 ```bash
-cp ../.env.example .env
-# Edit .env with your specific configuration
+OPENAI_API_KEY=your_openrouter_key
+OPENAI_MODEL=google/gemini-2.0-flash-001
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/todo_db
 ```
 
-5. Start the database with Docker:
+5. Start the database and seed the demo user:
 ```bash
 docker-compose up -d
+python src/seed.py
 ```
 
 6. Run the backend server:
 ```bash
-cd src
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn src.main:app --reload --port 8000
 ```
 
 ### Frontend Setup
@@ -72,13 +77,7 @@ cd frontend
 npm install
 ```
 
-3. Copy the environment example:
-```bash
-cp .env.example .env.local
-# Edit .env.local with your specific configuration
-```
-
-4. Run the development server:
+3. Run the development server:
 ```bash
 npm run dev
 ```
@@ -87,14 +86,9 @@ The application will be accessible at `http://localhost:3000`.
 
 ## API Endpoints
 
-The backend provides the following API endpoints:
-
-- `POST /api/tasks` - Create a new task
-- `GET /api/tasks` - Get all tasks for the authenticated user
-- `GET /api/tasks/{id}` - Get a specific task
-- `PUT /api/tasks/{id}` - Update a task
-- `DELETE /api/tasks/{id}` - Delete a task
-- `PATCH /api/tasks/{id}/complete` - Update task completion status
+- `POST /api/chat` - Interact with the AI Chatbot
+- `GET /api/tasks` - Manage tasks via standard REST
+- `POST /api/auth/login` - Secure user authentication
 
 ## Project Structure
 
@@ -102,36 +96,20 @@ The backend provides the following API endpoints:
 ├── backend/
 │   ├── src/
 │   │   ├── main.py
-│   │   ├── db.py
-│   │   ├── models/
-│   │   ├── api/
-│   │   └── auth/
+│   │   ├── ai/          # AI Agent and logic
+│   │   ├── mcp/         # Model Context Protocol tools
+│   │   ├── api/         # FastAPI routes
+│   │   ├── models/      # Database models (Task, User, Conversation)
+│   │   └── services/    # Business logic layer
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── app/
-│   │   ├── components/
-│   │   ├── lib/
-│   │   └── styles/
-│   ├── package.json
-│   └── tsconfig.json
-├── specs/
-│   └── 002-phase-2-web-app/
-├── docker-compose.yml
-├── .env.example
+│   │   ├── app/chat/    # Phase III Chat Interface
+│   │   ├── components/  # ChatKit and UI components
+│   │   └── lib/         # API and Auth utilities
+├── docker-compose.yml   # Database orchestration
 └── README.md
 ```
-
-## Development
-
-For development, both the backend and frontend need to run simultaneously. The frontend expects the backend to be available at `http://localhost:8000`.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
 
 ## License
 
