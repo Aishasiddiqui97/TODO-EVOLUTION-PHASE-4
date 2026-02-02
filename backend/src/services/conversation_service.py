@@ -38,7 +38,7 @@ class ConversationService:
 
     async def create_conversation(
         self,
-        user_id: int,
+        user_id: str,
         title: Optional[str] = None
     ) -> Conversation:
         """
@@ -66,7 +66,7 @@ class ConversationService:
     async def get_conversation(
         self,
         conversation_id: str,
-        user_id: int
+        user_id: str
     ) -> Optional[Conversation]:
         """
         Get a conversation by ID, ensuring it belongs to the user.
@@ -95,7 +95,7 @@ class ConversationService:
 
     async def get_user_conversations(
         self,
-        user_id: int,
+        user_id: str,
         limit: int = 10
     ) -> List[Conversation]:
         """
@@ -174,7 +174,7 @@ class ConversationService:
     async def delete_conversation(
         self,
         conversation_id: str,
-        user_id: int
+        user_id: str
     ) -> bool:
         """
         Delete a conversation and all its messages.
@@ -200,7 +200,7 @@ class ConversationService:
     async def get_conversation_with_messages(
         self,
         conversation_id: str,
-        user_id: int
+        user_id: str
     ) -> Optional[Conversation]:
         """
         Get a conversation with all its messages loaded.

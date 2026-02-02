@@ -59,11 +59,12 @@ class MCPTool(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, **kwargs: Any) -> Dict[str, Any]:
+    async def execute(self, session: Any, **kwargs: Any) -> Dict[str, Any]:
         """
-        Execute the tool with given parameters.
+        Execute the tool with given parameters and database session.
 
         Args:
+            session: Database session for stateless operations
             **kwargs: Tool-specific parameters
 
         Returns:

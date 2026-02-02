@@ -4,9 +4,13 @@ Extends Phase II auth with session management for stateless chat.
 """
 import os
 from datetime import timedelta
+from fastapi.security import HTTPBearer
+
+# Security Scheme
+security = HTTPBearer()
 
 # JWT Configuration
-SECRET_KEY = os.getenv("AUTH_SECRET", "your-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY") or os.getenv("AUTH_SECRET", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

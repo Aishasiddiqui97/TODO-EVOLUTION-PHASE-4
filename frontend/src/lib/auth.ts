@@ -31,7 +31,20 @@ export const getUserInfo = () => {
   if (!token) return null;
 
   try {
-    const base64Url = token.split('.')[1];
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      if (!token.startsWith('mock_')) {
+        console.error('Invalid token format');
+      }
+      return null;
+    }
+
+    const base64Url = tokenParts[1];
+    if (!base64Url) {
+      console.error('Missing token payload');
+      return null;
+    }
+
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)

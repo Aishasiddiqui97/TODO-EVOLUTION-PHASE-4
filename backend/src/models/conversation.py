@@ -16,7 +16,7 @@ class Conversation(SQLModel, table=True):
         primary_key=True,
         description="UUID for the conversation"
     )
-    user_id: int = Field(
+    user_id: str = Field(
         foreign_key="users.id",
         index=True,
         description="ID of the user who owns this conversation"

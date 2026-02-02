@@ -92,24 +92,47 @@ export default function TodosPage() {
             Evolution of Todo - Neon Edition
           </p>
         </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            padding: '10px 25px',
-            background: 'linear-gradient(90deg, #ff006e, #ff8c00)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            boxShadow: '0 0 20px rgba(255, 0, 110, 0.5)'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          Logout
-        </button>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          <a href="/chat" style={{ textDecoration: 'none' }}>
+            <button
+              style={{
+                padding: '10px 25px',
+                background: 'linear-gradient(90deg, #00f5ff, #a855f7)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                boxShadow: '0 0 20px rgba(0, 245, 255, 0.5)',
+                transition: 'transform 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              🤖 AI Chat
+            </button>
+          </a>
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '10px 25px',
+              background: 'linear-gradient(90deg, #ff006e, #ff8c00)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 0 20px rgba(255, 0, 110, 0.5)',
+              transition: 'transform 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Logout
+          </button>
+        </div>
       </nav>
 
       {/* Main Content */}

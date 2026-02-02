@@ -39,13 +39,15 @@ class MCPServer:
     async def execute_tool(
         self,
         tool_name: str,
+        session: Any,  # Database session to pass to tools
         **kwargs: Any
     ) -> Dict[str, Any]:
         """
-        Execute a registered tool by name.
+        Execute a registered tool by name with shared database session.
 
         Args:
             tool_name: Name of the tool to execute
+            session: Database session to pass to tool
             **kwargs: Arguments to pass to the tool
 
         Returns:
@@ -66,12 +68,13 @@ class MCPServer:
 
         try:
             logger.info(f"Executing tool: {tool_name} with args: {kwargs}")
-            result = await tool.execute(**kwargs)
+            # Pass session to tool execution
+            result = await tool.execute(session=session, **kwargs)
             logger.info(f"Tool {tool_name} executed successfully")
             return result
 
         except Exception as e:
-            logger.error(f"Tool {tool_name} execution failed: {str(e)}")
+            logger.error(f"Tool {tool_name} execution failed: {str(e)}", exc_info=True)
             return {
                 "success": False,
                 "error": "tool_execution_failed",

@@ -44,19 +44,18 @@ class ToolRegistry:
         all Phase III tools with the MCP server.
         """
         # Import tools here to avoid circular imports
-        # Tools will be implemented in Phase 3 (User Story 1)
-        # from .tools.add_task import AddTaskTool
-        # from .tools.list_tasks import ListTasksTool
-        # from .tools.complete_task import CompleteTaskTool
-        # from .tools.update_task import UpdateTaskTool
-        # from .tools.delete_task import DeleteTaskTool
+        from .tools.add_task import AddTaskTool
+        from .tools.list_tasks import ListTasksTool
+        from .tools.complete_task import CompleteTaskTool
+        from .tools.update_task import UpdateTaskTool
+        from .tools.delete_task import DeleteTaskTool
 
         # Register tools
-        # self.register(AddTaskTool())
-        # self.register(ListTasksTool())
-        # self.register(CompleteTaskTool())
-        # self.register(UpdateTaskTool())
-        # self.register(DeleteTaskTool())
+        self.register(AddTaskTool())
+        self.register(ListTasksTool())
+        self.register(CompleteTaskTool())
+        self.register(UpdateTaskTool())
+        self.register(DeleteTaskTool())
 
         logger.info(f"Registered {len(self.registered_tools)} tools")
 

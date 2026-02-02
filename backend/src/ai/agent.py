@@ -15,7 +15,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL")
+)
 
 
 class TodoChatbotAgent:
@@ -26,14 +29,14 @@ class TodoChatbotAgent:
     and calls appropriate MCP tools to perform task operations.
     """
 
-    def __init__(self, model: str = "gpt-4-turbo-preview"):
+    def __init__(self, model: Optional[str] = None):
         """
         Initialize the Todo Chatbot agent.
 
         Args:
-            model: OpenAI model to use (default: gpt-4-turbo-preview)
+            model: OpenAI model to use (default: from OPENAI_MODEL env or gpt-4-turbo-preview)
         """
-        self.model = model
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
         self.system_prompt = self._get_system_prompt()
         logger.info(f"TodoChatbotAgent initialized with model: {model}")
 
@@ -133,6 +136,7 @@ Remember:
 
         except Exception as e:
             logger.error(f"Agent processing failed: {str(e)}")
+            print(f"CRITICAL AGENT ERROR: {str(e)}")
             return {
                 "response": "I'm sorry, I encountered an error processing your request. Please try again.",
                 "tool_calls": [],

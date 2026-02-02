@@ -1,11 +1,12 @@
-"""
-Chat interface component for Phase III.
-Provides a conversational UI for task management.
-"""
+/**
+ * Chat interface component for Phase III.
+ * Provides a conversational UI for task management.
+ */
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { MessageRenderer } from './MessageRenderer'
+import { getAccessToken, getUserInfo, isAuthenticated } from '@/lib/auth'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -35,9 +36,12 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
+    // CRITICAL FIX: Capture input value BEFORE clearing state
+    const messageText = input.trim()
+
     const userMessage: Message = {
       role: 'user',
-      content: input
+      content: messageText
     }
 
     setMessages(prev => [...prev, userMessage])
@@ -45,23 +49,43 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
     setLoading(true)
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
+      if (!isAuthenticated()) {
+        throw new Error("You must be logged in to use the chat.");
+      }
+
+      const userInfo = getUserInfo();
+      const userId = userInfo?.sub || userInfo?.id || '550e8400-e29b-41d4-a716-446655440000';
+
+      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${userId}/chat`;
+      const requestBody = {
+        conversation_id: conversationId || null,
+        message: messageText  // Use captured value instead of cleared 'input'
+      };
+
+      // Log request for debugging
+      console.log('[ChatKit] Sending message to:', apiUrl);
+      console.log('[ChatKit] Request body:', requestBody);
+      console.log('[ChatKit] Auth token:', getAccessToken() ? 'Present' : 'Missing');
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         },
-        body: JSON.stringify({
-          conversation_id: conversationId,
-          message: input
-        })
+        body: JSON.stringify(requestBody)
       })
 
+      console.log('[ChatKit] Response status:', response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error('Failed to send message')
+        const errorText = await response.text();
+        console.error('[ChatKit] API Error Response:', errorText);
+        throw new Error(`API returned ${response.status}: ${errorText}`);
       }
 
       const data = await response.json()
+      console.log('[ChatKit] Response data:', data);
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -75,10 +99,24 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
         onConversationChange(data.conversation_id)
       }
     } catch (error) {
-      console.error('Error sending message:', error)
+      console.error('[ChatKit] Error details:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      let errorDetails = 'Unknown error';
+
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        errorDetails = `Cannot connect to backend server at ${apiUrl}. Please ensure:\n1. Backend server is running\n2. Server is accessible at ${apiUrl}\n3. No CORS issues`;
+      } else if (error instanceof Error) {
+        errorDetails = error.message;
+      }
+
       const errorMessage: Message = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.'
+        content: `❌ Error: ${errorDetails}`
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {
