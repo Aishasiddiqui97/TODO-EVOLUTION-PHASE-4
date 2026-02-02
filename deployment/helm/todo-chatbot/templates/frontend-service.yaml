@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Chart.Name }}-{{ .Values.frontend.name }}
+  labels:
+    app: {{ .Chart.Name }}
+    component: {{ .Values.frontend.name }}
+spec:
+  type: {{ .Values.frontend.service.type }}
+  ports:
+  - port: {{ .Values.frontend.service.port }}
+    targetPort: {{ .Values.frontend.service.targetPort }}
+    nodePort: {{ .Values.frontend.service.nodePort }}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{ .Chart.Name }}
+    component: {{ .Values.frontend.name }}

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: todo-chatbot
+description: A Helm chart for Todo Chatbot application with AI-powered backend and frontend
+type: application
+version: 1.0.0
+appVersion: "v1.0.0"
+keywords:
+  - todo
+  - chatbot
+  - kubernetes
+  - ai
+maintainers:
+  - name: Claude Code
+    email: noreply@anthropic.com
