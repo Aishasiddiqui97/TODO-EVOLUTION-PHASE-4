@@ -29,21 +29,33 @@ backend:
     failureThreshold: 3
   env:
     - name: DATABASE_URL
-      value: "postgresql://user:password@neon-db:5432/tododb"
+      value: "postgresql://postgres:postgres@host.minikube.internal:5432/todo_db"
     - name: ENVIRONMENT
       value: "production"
+    - name: OPENAI_API_KEY
+      value: "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"
+    - name: OPENAI_BASE_URL
+      value: "https://openrouter.ai/api/v1"
+    - name: OPENAI_MODEL
+      value: "google/gemini-2.0-flash-001"
+    - name: SECRET_KEY
+      value: "development_secret_key"
+    - name: ALGORITHM
+      value: "HS256"
+    - name: ALLOWED_ORIGINS
+      value: "*"
 
 frontend:
   name: frontend
   replicas: 1
   image:
     repository: todo-frontend
-    tag: v1.0.0
+    tag: v1.0.1
     pullPolicy: IfNotPresent
   service:
     type: NodePort
-    port: 80
-    targetPort: 80
+    port: 3000
+    targetPort: 3000
     nodePort: 30080
   resources:
     requests:
@@ -53,8 +65,8 @@ frontend:
       memory: "256Mi"
       cpu: "200m"
   healthCheck:
-    path: /health
-    initialDelaySeconds: 5
+    path: /
+    initialDelaySeconds: 20
     periodSeconds: 10
     timeoutSeconds: 3
     successThreshold: 1
