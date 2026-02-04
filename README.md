@@ -1,33 +1,61 @@
-# Evolution of Todo - Phase III
+# 🚀 Evolution of Todo - Phase 4
 
-A supercharged full-stack web application for managing tasks, now featuring an **AI-powered Chatbot** for natural language task management.
+A supercharged full-stack web application for managing tasks, now featuring an AI-powered Chatbot for natural language task management.
 
-## Features
+## ✨ Features
 
-- **AI Chatbot**: Manage your tasks through natural conversation using the integrated AI assistant.
-- **MCP Integration**: Uses Model Context Protocol (MCP) to bridge the AI agent with the task database securely.
-- **User Authentication**: Secure sign up and sign in with JWT tokens.
-- **Todo Management**: Create, read, update, delete, and toggle completion of tasks via UI or Chat.
-- **User Isolation**: Users can only access their own tasks and conversation history.
-- **Persistent Storage**: All tasks and chat messages are stored in a PostgreSQL database.
+### 🤖 AI Chatbot
+Manage your tasks through natural conversation using the integrated AI assistant.
 
-## Tech Stack
+### 🔗 MCP Integration
+Uses Model Context Protocol (MCP) to bridge the AI agent with the task database securely.
 
-- **Backend**: Python, FastAPI, SQLModel, PostgreSQL
-- **AI Agent**: OpenAI Agents SDK, OpenRouter (Gemini 2.0 Flash)
-- **Protocol**: Model Context Protocol (MCP) for tool execution
-- **Frontend**: Next.js 16+, TypeScript, Tailwind CSS
-- **Authentication**: JWT-based authentication
-- **Database**: PostgreSQL (Docker-based local setup)
+### 🔐 User Authentication
+Secure sign up and sign in with JWT tokens.
 
-## Prerequisites
+### 📋 Todo Management
+Create, read, update, delete, and toggle completion of tasks via UI or Chat.
 
-- Python 3.13+
-- Node.js 18+
-- Docker (for PostgreSQL)
-- OpenRouter API Key (for Chat features)
+### 👤 User Isolation
+Users can only access their own tasks and conversation history.
 
-## Setup Instructions
+### 💾 Persistent Storage
+All tasks and chat messages are stored in a PostgreSQL database.
+
+## 🛠️ Tech Stack
+
+### Backend
+- **Python 3.13+**
+- **FastAPI**
+- **SQLModel**
+- **PostgreSQL**
+
+### AI Agent
+- **OpenAI Agents SDK**
+- **OpenRouter (Gemini 2.0 Flash)**
+
+### Protocol
+- **Model Context Protocol (MCP)** for tool execution
+
+### Frontend
+- **Next.js 16+**
+- **TypeScript**
+- **Tailwind CSS**
+
+### Authentication
+- **JWT-based authentication**
+
+### Database
+- **PostgreSQL** (Docker-based local setup)
+
+## 📋 Prerequisites
+
+- **Python 3.13+**
+- **Node.js 18+**
+- **Docker** (for PostgreSQL)
+- **OpenRouter API Key** (for Chat features)
+
+## 🚀 Setup Instructions
 
 ### Backend Setup
 
@@ -48,7 +76,7 @@ pip install -r requirements.txt
 ```
 
 4. Configure environment variables in `backend/.env`:
-```bash
+```env
 OPENAI_API_KEY=your_openrouter_key
 OPENAI_MODEL=google/gemini-2.0-flash-001
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/todo_db
@@ -82,15 +110,15 @@ npm install
 npm run dev
 ```
 
-The application will be accessible at `http://localhost:3000`.
+The application will be accessible at **http://localhost:3000**.
 
-## API Endpoints
+## 🔗 API Endpoints
 
-- `POST /api/chat` - Interact with the AI Chatbot
-- `GET /api/tasks` - Manage tasks via standard REST
-- `POST /api/auth/login` - Secure user authentication
+- **POST /api/chat** - Interact with the AI Chatbot
+- **GET /api/tasks** - Manage tasks via standard REST
+- **POST /api/auth/login** - Secure user authentication
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 ├── backend/
@@ -104,13 +132,13 @@ The application will be accessible at `http://localhost:3000`.
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── app/chat/    # Phase III Chat Interface
+│   │   ├── app/chat/    # Phase 4 Chat Interface
 │   │   ├── components/  # ChatKit and UI components
 │   │   └── lib/         # API and Auth utilities
 ├── docker-compose.yml   # Database orchestration
 └── README.md
 ```
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License.
