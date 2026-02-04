@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}-{{ .Values.frontend.name }}
+  labels:
+    app: {{ .Chart.Name }}
+    component: {{ .Values.frontend.name }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+    rollingUpdate:
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+      component: {{ .Values.frontend.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+        component: {{ .Values.frontend.name }}
+    spec:
+      containers:
+      - name: {{ .Values.frontend.name }}
+        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.frontend.service.targetPort }}
+          protocol: TCP
+        resources:
+          requests:
+            memory: {{ .Values.frontend.resources.requests.memory }}
+            cpu: {{ .Values.frontend.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.frontend.resources.limits.memory }}
+            cpu: {{ .Values.frontend.resources.limits.cpu }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.frontend.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.frontend.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.frontend.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.frontend.healthCheck.timeoutSeconds }}
+          successThreshold: {{ .Values.frontend.healthCheck.successThreshold }}
+          failureThreshold: {{ .Values.frontend.healthCheck.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.frontend.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.frontend.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.frontend.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.frontend.healthCheck.timeoutSeconds }}
+          successThreshold: {{ .Values.frontend.healthCheck.successThreshold }}
+          failureThreshold: {{ .Values.frontend.healthCheck.failureThreshold }}

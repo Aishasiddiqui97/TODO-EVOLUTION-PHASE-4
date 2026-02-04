@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}-{{ .Values.backend.name }}
+  labels:
+    app: {{ .Chart.Name }}
+    component: {{ .Values.backend.name }}
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+    rollingUpdate:
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+      component: {{ .Values.backend.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+        component: {{ .Values.backend.name }}
+    spec:
+      containers:
+      - name: {{ .Values.backend.name }}
+        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.backend.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- range .Values.backend.env }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+        {{- end }}
+        resources:
+          requests:
+            memory: {{ .Values.backend.resources.requests.memory }}
+            cpu: {{ .Values.backend.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.backend.resources.limits.memory }}
+            cpu: {{ .Values.backend.resources.limits.cpu }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.backend.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.backend.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.backend.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.backend.healthCheck.timeoutSeconds }}
+          successThreshold: {{ .Values.backend.healthCheck.successThreshold }}
+          failureThreshold: {{ .Values.backend.healthCheck.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.backend.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.backend.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.backend.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.backend.healthCheck.timeoutSeconds }}
+          successThreshold: {{ .Values.backend.healthCheck.successThreshold }}
+          failureThreshold: {{ .Values.backend.healthCheck.failureThreshold }}
