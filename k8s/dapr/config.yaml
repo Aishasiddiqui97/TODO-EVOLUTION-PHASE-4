@@ -1,0 +1,22 @@
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: dapr-config
+spec:
+  tracing:
+    samplingRate: "1"
+    zipkin:
+      endpointAddress: "http://zipkin:9411/api/v2/spans"
+  metric:
+    enabled: true
+  metrics:
+    enabled: true
+    rules:
+      - name: appmetrics
+        labels:
+          - name: app_id
+            value: ${APP_ID}
+          - name: method
+            value: ${METHOD}
+          - name: status_code
+            value: ${STATUS_CODE}
