@@ -1,0 +1,35 @@
+# Production replicas
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-api
+spec:
+  replicas: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recurring-task
+spec:
+  replicas: 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+spec:
+  replicas: 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: websocket-sync
+spec:
+  replicas: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-log
+spec:
+  replicas: 2

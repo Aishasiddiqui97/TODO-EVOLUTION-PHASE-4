@@ -1,0 +1,249 @@
+name: CD - Continuous Deployment
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: your-registry.azurecr.io
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [chat-api, recurring-task, notification, websocket-sync, audit-log]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/todo-chatbot/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: backend/src/services/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/todo-chatbot/${{ matrix.service }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/todo-chatbot/${{ matrix.service }}:buildcache,mode=max
+
+  build-frontend:
+    name: Build and Deploy Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./frontend
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.todo-chatbot.example.com
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Set up Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Update image tags
+        run: |
+          cd k8s/overlays/cloud
+          kustomize edit set image \
+            todo-chatbot/chat-api=${{ env.REGISTRY }}/todo-chatbot/chat-api:${{ github.sha }} \
+            todo-chatbot/recurring-task=${{ env.REGISTRY }}/todo-chatbot/recurring-task:${{ github.sha }} \
+            todo-chatbot/notification=${{ env.REGISTRY }}/todo-chatbot/notification:${{ github.sha }} \
+            todo-chatbot/websocket-sync=${{ env.REGISTRY }}/todo-chatbot/websocket-sync:${{ github.sha }} \
+            todo-chatbot/audit-log=${{ env.REGISTRY }}/todo-chatbot/audit-log:${{ github.sha }}
+
+      - name: Deploy to Kubernetes
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl apply -k k8s/overlays/cloud
+
+      - name: Wait for rollout
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl rollout status deployment/chat-api -n todo-chatbot-prod --timeout=5m
+          kubectl rollout status deployment/recurring-task -n todo-chatbot-prod --timeout=5m
+          kubectl rollout status deployment/notification -n todo-chatbot-prod --timeout=5m
+          kubectl rollout status deployment/websocket-sync -n todo-chatbot-prod --timeout=5m
+          kubectl rollout status deployment/audit-log -n todo-chatbot-prod --timeout=5m
+
+      - name: Run smoke tests
+        run: |
+          export KUBECONFIG=kubeconfig
+          # Get service endpoints
+          API_URL=$(kubectl get ingress todo-chatbot-ingress -n todo-chatbot-prod -o jsonpath='{.spec.rules[0].host}')
+
+          # Test health endpoints
+          curl -f https://${API_URL}/health || exit 1
+
+          echo "Smoke tests passed!"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: https://todo-chatbot.example.com
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Set up Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Update image tags
+        run: |
+          cd k8s/overlays/cloud
+          kustomize edit set image \
+            todo-chatbot/chat-api=${{ env.REGISTRY }}/todo-chatbot/chat-api:${{ github.sha }} \
+            todo-chatbot/recurring-task=${{ env.REGISTRY }}/todo-chatbot/recurring-task:${{ github.sha }} \
+            todo-chatbot/notification=${{ env.REGISTRY }}/todo-chatbot/notification:${{ github.sha }} \
+            todo-chatbot/websocket-sync=${{ env.REGISTRY }}/todo-chatbot/websocket-sync:${{ github.sha }} \
+            todo-chatbot/audit-log=${{ env.REGISTRY }}/todo-chatbot/audit-log:${{ github.sha }}
+
+      - name: Deploy to Kubernetes
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl apply -k k8s/overlays/cloud
+
+      - name: Wait for rollout
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl rollout status deployment/chat-api -n todo-chatbot-prod --timeout=10m
+          kubectl rollout status deployment/recurring-task -n todo-chatbot-prod --timeout=10m
+          kubectl rollout status deployment/notification -n todo-chatbot-prod --timeout=10m
+          kubectl rollout status deployment/websocket-sync -n todo-chatbot-prod --timeout=10m
+          kubectl rollout status deployment/audit-log -n todo-chatbot-prod --timeout=10m
+
+      - name: Run smoke tests
+        run: |
+          export KUBECONFIG=kubeconfig
+          # Get service endpoints
+          API_URL=$(kubectl get ingress todo-chatbot-ingress -n todo-chatbot-prod -o jsonpath='{.spec.rules[0].host}')
+
+          # Test health endpoints
+          curl -f https://${API_URL}/health || exit 1
+
+          echo "Production smoke tests passed!"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            ## Changes in this Release
+            - Deployed to production
+            - All services updated to version ${{ github.sha }}
+          draft: false
+          prerelease: false
+
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Deployment ${{ job.status }}
+            Environment: ${{ github.event.inputs.environment || 'staging' }}
+            Commit: ${{ github.sha }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()

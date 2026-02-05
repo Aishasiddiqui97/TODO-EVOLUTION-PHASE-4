@@ -1,0 +1,55 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: todo-chatbot-local
+
+# Common labels for all resources
+commonLabels:
+  environment: local
+  app.kubernetes.io/part-of: todo-chatbot
+
+# Resources to deploy
+resources:
+  # Services
+  - ../../services/chat-api-deployment.yaml
+  - ../../services/chat-api-service.yaml
+  - ../../services/recurring-task-deployment.yaml
+  - ../../services/recurring-task-service.yaml
+  - ../../services/notification-deployment.yaml
+  - ../../services/notification-service.yaml
+  - ../../services/websocket-sync-deployment.yaml
+  - ../../services/websocket-sync-service.yaml
+  - ../../services/audit-log-deployment.yaml
+  - ../../services/audit-log-service.yaml
+
+# Dapr components for local development
+components:
+  - ../../dapr/pubsub.yaml
+  - ../../dapr/statestore.yaml
+
+# Patches for local environment
+patchesStrategicMerge:
+  - replicas-patch.yaml
+  - resources-patch.yaml
+
+# ConfigMap generator for local config
+configMapGenerator:
+  - name: app-config
+    literals:
+      - ENVIRONMENT=local
+      - LOG_LEVEL=debug
+      - DAPR_HTTP_PORT=3500
+      - DAPR_GRPC_PORT=50001
+
+# Images (use local tags)
+images:
+  - name: todo-chatbot/chat-api
+    newTag: latest
+  - name: todo-chatbot/recurring-task
+    newTag: latest
+  - name: todo-chatbot/notification
+    newTag: latest
+  - name: todo-chatbot/websocket-sync
+    newTag: latest
+  - name: todo-chatbot/audit-log
+    newTag: latest

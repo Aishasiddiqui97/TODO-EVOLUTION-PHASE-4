@@ -1,0 +1,28 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+spec:
+  type: state.azure.cosmosdb
+  version: v1
+  metadata:
+  # Azure Cosmos DB connection from Kubernetes secret
+  - name: url
+    secretKeyRef:
+      name: azure-cosmosdb
+      key: url
+  - name: masterKey
+    secretKeyRef:
+      name: azure-cosmosdb
+      key: masterKey
+  - name: database
+    value: "todo-chatbot"
+  - name: collection
+    value: "state"
+  # Performance settings
+  - name: partitionKey
+    value: "partitionKey"
+  - name: actorStateStore
+    value: "true"
+auth:
+  secretStore: kubernetes

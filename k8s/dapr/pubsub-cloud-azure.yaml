@@ -1,0 +1,32 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: task-pubsub
+spec:
+  type: pubsub.azure.servicebus.topics
+  version: v1
+  metadata:
+  # Azure Service Bus connection string from Kubernetes secret
+  - name: connectionString
+    secretKeyRef:
+      name: azure-servicebus
+      key: connectionString
+  # Topic entity management
+  - name: consumerID
+    value: "{podName}"
+  - name: timeoutInSec
+    value: "60"
+  - name: handlerTimeoutInSec
+    value: "60"
+  - name: lockRenewalInSec
+    value: "20"
+  - name: maxActiveMessages
+    value: "10000"
+  - name: maxConcurrentHandlers
+    value: "10"
+  - name: prefetchCount
+    value: "0"
+  - name: disableEntityManagement
+    value: "false"
+auth:
+  secretStore: kubernetes

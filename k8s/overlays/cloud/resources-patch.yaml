@@ -1,0 +1,85 @@
+# Production resource allocations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-api
+spec:
+  template:
+    spec:
+      containers:
+      - name: chat-api
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recurring-task
+spec:
+  template:
+    spec:
+      containers:
+      - name: recurring-task
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+spec:
+  template:
+    spec:
+      containers:
+      - name: notification
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: websocket-sync
+spec:
+  template:
+    spec:
+      containers:
+      - name: websocket-sync
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-log
+spec:
+  template:
+    spec:
+      containers:
+      - name: audit-log
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

@@ -1,0 +1,89 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: todo-chatbot-prod
+
+# Common labels for all resources
+commonLabels:
+  environment: production
+  app.kubernetes.io/part-of: todo-chatbot
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  app.kubernetes.io/version: "1.0.0"
+
+# Resources to deploy
+resources:
+  # Services
+  - ../../services/chat-api-deployment.yaml
+  - ../../services/chat-api-service.yaml
+  - ../../services/recurring-task-deployment.yaml
+  - ../../services/recurring-task-service.yaml
+  - ../../services/notification-deployment.yaml
+  - ../../services/notification-service.yaml
+  - ../../services/websocket-sync-deployment.yaml
+  - ../../services/websocket-sync-service.yaml
+  - ../../services/audit-log-deployment.yaml
+  - ../../services/audit-log-service.yaml
+
+  # Ingress
+  - ingress.yaml
+
+# Dapr components for cloud (Azure)
+components:
+  - ../../dapr/pubsub-cloud-azure.yaml
+  - ../../dapr/statestore-cloud-azure.yaml
+  - ../../dapr/secretstore-cloud-azure.yaml
+
+# Patches for production environment
+patchesStrategicMerge:
+  - replicas-patch.yaml
+  - resources-patch.yaml
+  - security-patch.yaml
+
+# ConfigMap generator for production config
+configMapGenerator:
+  - name: app-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - DAPR_HTTP_PORT=3500
+      - DAPR_GRPC_PORT=50001
+
+# Secret generator (placeholder - use external secrets in production)
+secretGenerator:
+  - name: app-secrets
+    literals:
+      - PLACEHOLDER=replace-with-external-secrets
+
+# Images (use versioned tags from registry)
+images:
+  - name: todo-chatbot/chat-api
+    newName: your-registry.azurecr.io/todo-chatbot/chat-api
+    newTag: v1.0.0
+  - name: todo-chatbot/recurring-task
+    newName: your-registry.azurecr.io/todo-chatbot/recurring-task
+    newTag: v1.0.0
+  - name: todo-chatbot/notification
+    newName: your-registry.azurecr.io/todo-chatbot/notification
+    newTag: v1.0.0
+  - name: todo-chatbot/websocket-sync
+    newName: your-registry.azurecr.io/todo-chatbot/websocket-sync
+    newTag: v1.0.0
+  - name: todo-chatbot/audit-log
+    newName: your-registry.azurecr.io/todo-chatbot/audit-log
+    newTag: v1.0.0
+
+# Replicas for production
+replicas:
+  - name: chat-api
+    count: 3
+  - name: recurring-task
+    count: 2
+  - name: notification
+    count: 2
+  - name: websocket-sync
+    count: 3
+  - name: audit-log
+    count: 2
