@@ -5,5 +5,6 @@ __all__ = [
     "update_task",
     "complete_task",
     "delete_task",
-    "list_tasks"
+    "list_tasks",
+    "search_tasks"
 ]
