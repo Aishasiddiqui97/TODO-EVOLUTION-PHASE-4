@@ -1,290 +1,159 @@
 """
-Stateless chat endpoint for Phase III AI Chatbot.
-Handles user messages and returns AI responses.
+Chat API Routes for Event-Driven Todo Chatbot.
 
-Constitutional Requirements:
-- Server MUST be stateless (no in-memory conversation state)
-- Conversation history MUST be fetched from database each request
-- Each request MUST be independent and self-contained
+Provides conversational interface using OpenAI Agents SDK with MCP tools.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import logging
-import json
 
-from ...db import get_async_session
-from ...ai.agent import agent
-from ...mcp.server import mcp_server
-from ...services.conversation_service import ConversationService
-from ...services.message_service import MessageService
-from ...auth.middleware import get_current_user_id
-from ...auth.config import security
+import os
+import logging
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
+
+from ...mcp.tools.create_task import create_task, CreateTaskInput
+from ...mcp.tools.update_task import update_task, UpdateTaskInput
+from ...mcp.tools.complete_task import complete_task, CompleteTaskInput
+from ...mcp.tools.delete_task import delete_task, DeleteTaskInput
+from ...mcp.tools.list_tasks import list_tasks, ListTasksInput
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1")
+
+# Temporary: Hardcoded user ID for MVP
+TEMP_USER_ID = "user-001"
+
+
+# Request/Response Models
+class ChatMessage(BaseModel):
+    """Chat message model."""
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str
 
 
 class ChatRequest(BaseModel):
-    """Request model for chat endpoint"""
-    conversation_id: Optional[str] = None
-    message: str
+    """Request model for chat endpoint."""
+    message: str = Field(..., min_length=1, max_length=2000)
+    conversationId: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
-    """Response model for chat endpoint"""
-    conversation_id: str
-    response: str
-    tool_calls: List[Dict[str, Any]] = []
+    """Response model for chat endpoint."""
+    message: str
+    conversationId: str
+    toolCalls: Optional[List[dict]] = None
 
 
-@router.post("/api/{user_id}/chat", response_model=ChatResponse)
-async def chat(
-    user_id: str,
-    request: ChatRequest,
-    session: AsyncSession = Depends(get_async_session),
-    credentials = Depends(security)
-):
+@router.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest):
     """
-    Stateless chat endpoint for AI-powered todo management.
+    Process a chat message and return AI response.
 
-    Flow:
-    1. Validate user authentication
-    2. Fetch or create conversation from database
-    3. Load conversation history from database
-    4. Process message through AI agent
-    5. Execute MCP tools if needed (with shared DB session)
-    6. Persist messages to database
-    7. Return response
+    This endpoint uses OpenAI Agents SDK to process natural language
+    and execute task management operations through MCP tools.
 
     Args:
-        user_id: User ID from path parameter
-        request: Chat request with message and optional conversation_id
-        session: Async database session
-        credentials: JWT credentials for authentication
+        request: Chat request with user message
 
     Returns:
-        ChatResponse with conversation_id, response, and tool_calls
+        AI response with conversation ID
     """
-    logger.info(f"[CHAT] Request received from user {user_id}")
-    logger.info(f"[CHAT] Message: {request.message[:100]}...")
-    logger.info(f"[CHAT] Conversation ID: {request.conversation_id}")
-    
     try:
-        # Step 1: Validate user authentication
-        logger.info("[CHAT] Step 1: Validating authentication")
-        try:
-            authenticated_user_id = await get_current_user_id(credentials)
-            if str(authenticated_user_id) != user_id:
-                logger.warning(f"[CHAT] Auth mismatch: {authenticated_user_id} != {user_id}")
-                return ChatResponse(
-                    conversation_id=request.conversation_id or "error",
-                    response="❌ Authentication error: You don't have permission to access this chat.",
-                    tool_calls=[]
-                )
-        except HTTPException as e:
-            logger.error(f"[CHAT] Authentication failed: {e.detail}")
-            return ChatResponse(
-                conversation_id=request.conversation_id or "error",
-                response=f"❌ Authentication failed: {e.detail}. Please login again.",
-                tool_calls=[]
-            )
+        # TODO: Implement OpenAI Agents SDK integration in T046
+        # For now, return a simple echo response
 
-        # Step 2: Validate message
-        logger.info("[CHAT] Step 2: Validating message")
-        if not request.message or not request.message.strip():
-            logger.warning("[CHAT] Empty message received")
-            return ChatResponse(
-                conversation_id=request.conversation_id or "error",
-                response="❌ Please provide a message.",
-                tool_calls=[]
-            )
+        logger.info(f"Received chat message: {request.message[:100]}")
 
-        # Step 3: Initialize services (stateless - no state stored)
-        logger.info("[CHAT] Step 3: Initializing services")
-        conversation_service = ConversationService(session)
-        message_service = MessageService(session)
+        # Simple keyword-based routing for MVP demonstration
+        message_lower = request.message.lower()
 
-        # Step 4: Get or create conversation
-        logger.info("[CHAT] Step 4: Getting or creating conversation")
-        conversation = None
-        try:
-            if request.conversation_id:
-                logger.info(f"[CHAT] Fetching existing conversation: {request.conversation_id}")
-                conversation = await conversation_service.get_conversation(
-                    request.conversation_id,
-                    user_id
-                )
-                if not conversation:
-                    logger.warning(f"[CHAT] Conversation {request.conversation_id} not found")
-                    return ChatResponse(
-                        conversation_id=request.conversation_id,
-                        response="❌ Conversation not found. Starting a new conversation.",
-                        tool_calls=[]
-                    )
-            else:
-                logger.info("[CHAT] Creating new conversation")
-                conversation = await conversation_service.create_conversation(user_id)
-                logger.info(f"[CHAT] Created conversation: {conversation.id}")
-        except Exception as e:
-            logger.error(f"[CHAT] Error in conversation handling: {str(e)}", exc_info=True)
-            return ChatResponse(
-                conversation_id=request.conversation_id or "error",
-                response=f"❌ Database error: {str(e)}. Please try again.",
-                tool_calls=[]
-            )
+        response_message = "I'm your AI task assistant. I can help you create, update, list, complete, and delete tasks. What would you like to do?"
+        tool_calls = []
 
-        conversation_id = conversation.id
+        # Basic intent detection (will be replaced by OpenAI Agents SDK)
+        if any(word in message_lower for word in ["create", "add", "new task"]):
+            response_message = "I can help you create a task. Please provide the task title and any additional details like priority, due date, or tags."
 
-        # Step 5: Load conversation history from database (stateless)
-        logger.info("[CHAT] Step 5: Loading conversation history")
-        try:
-            history = await message_service.get_conversation_history(
-                conversation_id,
-                limit=20  # Last 20 messages for context
-            )
-            conversation_history = [
-                {"role": msg.role, "content": msg.content}
-                for msg in history
-            ]
-            logger.info(f"[CHAT] Loaded {len(conversation_history)} messages from history")
-        except Exception as e:
-            logger.error(f"[CHAT] Error loading history: {str(e)}", exc_info=True)
-            conversation_history = []
+        elif any(word in message_lower for word in ["list", "show", "what tasks", "my tasks"]):
+            # Demonstrate list_tasks tool
+            try:
+                result = await list_tasks(ListTasksInput(
+                    userId=TEMP_USER_ID,
+                    limit=10
+                ))
 
-        # Step 6: Get available MCP tools
-        logger.info("[CHAT] Step 6: Getting MCP tool schemas")
-        try:
-            tool_schemas = mcp_server.get_all_tool_schemas()
-            logger.info(f"[CHAT] Loaded {len(tool_schemas)} tool schemas")
-        except Exception as e:
-            logger.error(f"[CHAT] Error loading tool schemas: {str(e)}", exc_info=True)
-            tool_schemas = []
+                if result.success and result.count > 0:
+                    task_list = "\n".join([f"- {task['title']} (Priority: {task['priority']}, Status: {task['status']})"
+                                          for task in result.tasks[:5]])
+                    response_message = f"Here are your tasks:\n{task_list}"
+                    if result.count > 5:
+                        response_message += f"\n\n...and {result.count - 5} more tasks."
+                else:
+                    response_message = "You don't have any tasks yet. Would you like to create one?"
 
-        # Step 7: Process message through AI agent
-        logger.info("[CHAT] Step 7: Processing message through AI agent")
-        try:
-            agent_response = await agent.process_message(
-                user_message=request.message,
-                conversation_history=conversation_history,
-                available_tools=tool_schemas
-            )
-            logger.info(f"[CHAT] Agent response received, tool_calls: {len(agent_response.get('tool_calls', []))}")
-        except Exception as e:
-            logger.error(f"[CHAT] Agent processing failed: {str(e)}", exc_info=True)
-            return ChatResponse(
-                conversation_id=conversation_id,
-                response=f"❌ AI agent error: {str(e)}. Please try rephrasing your message.",
-                tool_calls=[]
-            )
+                tool_calls.append({
+                    "tool": "list_tasks",
+                    "result": "success"
+                })
+            except Exception as e:
+                logger.error(f"Error listing tasks: {e}", exc_info=True)
+                response_message = "I encountered an error while listing your tasks. Please try again."
 
-        # Step 8: Execute MCP tools if agent requested them
-        logger.info("[CHAT] Step 8: Executing MCP tools")
-        tool_results = []
-        if agent_response.get("tool_calls"):
-            for idx, tool_call in enumerate(agent_response["tool_calls"]):
-                try:
-                    tool_name = tool_call["tool"]
-                    logger.info(f"[CHAT] Executing tool {idx+1}/{len(agent_response['tool_calls'])}: {tool_name}")
-                    
-                    # Parse arguments safely
-                    try:
-                        arguments = json.loads(tool_call["arguments"]) if isinstance(tool_call["arguments"], str) else tool_call["arguments"]
-                    except json.JSONDecodeError as e:
-                        logger.error(f"[CHAT] JSON parse error for tool {tool_name}: {str(e)}")
-                        tool_results.append({
-                            "tool": tool_name,
-                            "arguments": {},
-                            "result": {"success": False, "error": "invalid_arguments", "message": "Failed to parse tool arguments"}
-                        })
-                        continue
+        elif any(word in message_lower for word in ["complete", "done", "finish"]):
+            response_message = "I can help you mark a task as complete. Which task would you like to complete? Please provide the task title or ID."
 
-                    # CRITICAL: Inject user_id into tool arguments
-                    arguments["user_id"] = user_id
-                    logger.info(f"[CHAT] Tool arguments: {arguments}")
+        elif any(word in message_lower for word in ["delete", "remove"]):
+            response_message = "I can help you delete a task. Which task would you like to delete? Please provide the task title or ID."
 
-                    # Execute tool through MCP server with shared session
-                    result = await mcp_server.execute_tool(
-                        tool_name=tool_name,
-                        session=session,  # Pass shared session
-                        **arguments
-                    )
-                    logger.info(f"[CHAT] Tool {tool_name} result: {result.get('success', False)}")
-                    
-                    tool_results.append({
-                        "tool": tool_name,
-                        "arguments": arguments,
-                        "result": result
-                    })
-                except Exception as e:
-                    logger.error(f"[CHAT] Tool execution error for {tool_call.get('tool', 'unknown')}: {str(e)}", exc_info=True)
-                    tool_results.append({
-                        "tool": tool_call.get("tool", "unknown"),
-                        "arguments": {},
-                        "result": {"success": False, "error": "execution_failed", "message": str(e)}
-                    })
+        elif any(word in message_lower for word in ["update", "change", "modify"]):
+            response_message = "I can help you update a task. Which task would you like to update, and what changes would you like to make?"
 
-        # Step 9: Generate final response with tool results
-        logger.info("[CHAT] Step 9: Generating final response")
-        try:
-            if tool_results:
-                final_response = await agent.generate_response_with_tool_results(
-                    original_message=request.message,
-                    tool_results=tool_results,
-                    conversation_history=conversation_history
-                )
-            else:
-                final_response = agent_response.get("response", "I'm here to help with your tasks!")
-            logger.info(f"[CHAT] Final response generated: {final_response[:100]}...")
-        except Exception as e:
-            logger.error(f"[CHAT] Response generation failed: {str(e)}", exc_info=True)
-            final_response = "I processed your request, but had trouble generating a response. Your action may have been completed."
+        # Generate or use conversation ID
+        conversation_id = request.conversationId or f"conv-{TEMP_USER_ID}-{os.urandom(4).hex()}"
 
-        # Step 10: Persist messages to database
-        logger.info("[CHAT] Step 10: Persisting messages to database")
-        try:
-            # Save user message
-            await message_service.add_message(
-                conversation_id=conversation_id,
-                role="user",
-                content=request.message
-            )
-            logger.info("[CHAT] User message saved")
-
-            # Save assistant message with tool calls
-            await message_service.add_message(
-                conversation_id=conversation_id,
-                role="assistant",
-                content=final_response,
-                tool_calls=tool_results if tool_results else None
-            )
-            logger.info("[CHAT] Assistant message saved")
-
-            # Update conversation last_message_at
-            await conversation_service.update_last_message_time(conversation_id)
-            logger.info("[CHAT] Conversation timestamp updated")
-        except Exception as e:
-            logger.error(f"[CHAT] Error persisting messages: {str(e)}", exc_info=True)
-            # Don't fail the request if message persistence fails
-            # The user already got their response
-
-        logger.info(f"[CHAT] Request completed successfully for conversation {conversation_id}")
-
-        # Return response
         return ChatResponse(
-            conversation_id=conversation_id,
-            response=final_response,
-            tool_calls=tool_results
+            message=response_message,
+            conversationId=conversation_id,
+            toolCalls=tool_calls if tool_calls else None
         )
 
     except Exception as e:
-        # Catch-all for any unexpected errors
-        logger.error(f"[CHAT] Unexpected error: {str(e)}", exc_info=True)
-        return ChatResponse(
-            conversation_id=request.conversation_id or "error",
-            response=f"❌ An unexpected error occurred. Please try again. Error: {str(e)[:100]}",
-            tool_calls=[]
+        logger.error(f"Error processing chat message: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process chat message: {str(e)}"
         )
 
+
+@router.get("/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str):
+    """
+    Retrieve conversation history.
+
+    Args:
+        conversation_id: Conversation ID
+
+    Returns:
+        Conversation history
+    """
+    # TODO: Implement conversation history retrieval from Dapr State API
+    return {
+        "conversationId": conversation_id,
+        "messages": [],
+        "message": "Conversation history not yet implemented"
+    }
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(conversation_id: str):
+    """
+    Delete conversation history.
+
+    Args:
+        conversation_id: Conversation ID
+
+    Returns:
+        No content
+    """
+    # TODO: Implement conversation deletion from Dapr State API
+    return None

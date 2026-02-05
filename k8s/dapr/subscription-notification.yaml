@@ -1,0 +1,13 @@
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: notification-subscriptions
+  namespace: default
+spec:
+  pubsubname: pubsub
+  topic: reminders
+  routes:
+    default: /events/reminder
+  scopes:
+  - notification
+  deadLetterTopic: reminders-dlq

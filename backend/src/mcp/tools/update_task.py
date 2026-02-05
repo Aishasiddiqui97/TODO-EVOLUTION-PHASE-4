@@ -1,223 +1,101 @@
 """
-Update Task MCP Tool for Phase III User Story 4.
-Allows AI agent to modify task details through natural language.
+Update Task MCP Tool for Event-Driven Todo Chatbot.
 
-Constitutional Requirements:
-- Tool is stateless (no in-memory state)
-- Persists task updates to database immediately
-- Returns structured result for AI agent
+Allows AI agent to update task properties through natural language conversation.
 """
-from typing import Dict, Any, Optional
+
 from datetime import datetime
-import logging
+from typing import Dict, Any, Optional, List
+from pydantic import BaseModel, Field
 
-from ..tools.base import MCPTool
-from ...services.task_service import TaskService
-from ...db import get_async_session
+from ...shared.models.task import Task, TaskPriority, TaskStatus
+from ...shared.dapr_client.client import DaprClientWrapper
+from ...shared.events.publisher import EventPublisher
+from ...shared.utils.state_keys import generate_task_key
 
-logger = logging.getLogger(__name__)
+
+class UpdateTaskInput(BaseModel):
+    """Input parameters for update_task tool."""
+    taskId: str = Field(..., min_length=1)
+    userId: str
+    title: Optional[str] = Field(None, min_length=1, max_length=500)
+    description: Optional[str] = Field(None, max_length=5000)
+    priority: Optional[str] = Field(None, pattern="^(high|medium|low)$")
+    dueDate: Optional[str] = None
+    dueTime: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
-class UpdateTaskTool(MCPTool):
+class UpdateTaskOutput(BaseModel):
+    """Output from update_task tool."""
+    success: bool
+    message: str
+
+
+async def update_task(input_data: UpdateTaskInput) -> UpdateTaskOutput:
     """
-    MCP tool for updating task details.
+    Update an existing task.
 
-    Supports partial updates of title, description, due_date, and priority.
+    Args:
+        input_data: Task update parameters
+
+    Returns:
+        UpdateTaskOutput with success message
     """
+    dapr_client = DaprClientWrapper()
+    event_publisher = EventPublisher("chat-api")
 
-    def get_name(self) -> str:
-        return "update_task"
+    # Retrieve existing task
+    state_key = generate_task_key(input_data.userId, input_data.taskId)
+    task_data = await dapr_client.get_state(state_key)
 
-    def get_description(self) -> str:
-        return """Update task details like title, description, due date, or priority.
-        Use this when the user wants to change, modify, or update a task.
-        Can match by task ID or task title."""
+    if not task_data:
+        return UpdateTaskOutput(
+            success=False,
+            message=f"Task with ID '{input_data.taskId}' not found"
+        )
 
-    def get_parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "user_id": {
-                    "type": "integer",
-                    "description": "ID of the user"
-                },
-                "task_id": {
-                    "type": "string",
-                    "description": "Specific task ID to update (if known)"
-                },
-                "task_title": {
-                    "type": "string",
-                    "description": "Current task title to match (if task_id not provided)"
-                },
-                "new_title": {
-                    "type": "string",
-                    "description": "New task title"
-                },
-                "new_description": {
-                    "type": "string",
-                    "description": "New task description"
-                },
-                "new_due_date": {
-                    "type": "string",
-                    "description": "New due date in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)"
-                },
-                "new_priority": {
-                    "type": "string",
-                    "enum": ["low", "medium", "high"],
-                    "description": "New task priority level"
-                }
-            },
-            "required": ["user_id"]
+    # Validate existing task
+    task = Task(**task_data)
+
+    # Update only provided fields
+    update_fields = {}
+    if input_data.title is not None:
+        update_fields["title"] = input_data.title
+    if input_data.description is not None:
+        update_fields["description"] = input_data.description
+    if input_data.priority is not None:
+        update_fields["priority"] = input_data.priority
+    if input_data.dueDate is not None:
+        update_fields["dueDate"] = input_data.dueDate
+    if input_data.dueTime is not None:
+        update_fields["dueTime"] = input_data.dueTime
+    if input_data.tags is not None:
+        update_fields["tags"] = input_data.tags
+
+    # Apply updates
+    updated_task_data = task.dict()
+    updated_task_data.update(update_fields)
+    updated_task_data["updatedAt"] = datetime.utcnow().isoformat() + "Z"
+
+    # Validate updated task
+    updated_task = Task(**updated_task_data)
+
+    # Save to state store
+    await dapr_client.save_state(state_key, updated_task.dict())
+
+    # Publish task.updated event
+    await event_publisher.publish(
+        topic="task-events",
+        event_type="task.updated",
+        user_id=input_data.userId,
+        payload={
+            "task": updated_task.dict(),
+            "updatedFields": list(update_fields.keys())
         }
+    )
 
-    async def execute(self, session: Any, **kwargs: Any) -> Dict[str, Any]:
-        """
-        Execute the update_task tool.
-
-        Args:
-            user_id: User ID (required)
-            task_id: Specific task ID (optional)
-            task_title: Current task title to match (optional)
-            new_title: New title (optional)
-            new_description: New description (optional)
-            new_due_date: New due date (optional)
-            new_priority: New priority (optional)
-
-        Returns:
-            Result dictionary with updated task details
-        """
-        try:
-            user_id = kwargs.get("user_id")
-            task_id = kwargs.get("task_id")
-            task_title = kwargs.get("task_title")
-            new_title = kwargs.get("new_title")
-            new_description = kwargs.get("new_description")
-            new_due_date_str = kwargs.get("new_due_date")
-            new_priority = kwargs.get("new_priority")
-
-            # Validate required fields
-            if not user_id:
-                return self._error_response(
-                    "invalid_input",
-                    "User ID is required"
-                )
-
-            if not task_id and not task_title:
-                return self._error_response(
-                    "invalid_input",
-                    "Either task_id or task_title is required to identify the task"
-                )
-
-            # Check if at least one field to update is provided
-            if not any([new_title, new_description, new_due_date_str, new_priority]):
-                return self._error_response(
-                    "invalid_input",
-                "At least one field to update must be provided"
-            )
-
-            task_service = TaskService(session)
-
-            # Try to find task by ID first
-            if task_id:
-                task = await task_service.get_task(task_id, str(user_id))
-                if not task:
-                    return self._error_response(
-                        "task_not_found",
-                        f"I couldn't find a task with ID '{task_id}'. Could you describe it differently?"
-                    )
-            # Otherwise, search by title
-            else:
-                matching_tasks = await task_service.search_tasks(
-                    user_id=str(user_id),
-                    query=task_title,
-                    limit=5
-                )
-
-                if not matching_tasks:
-                    return self._error_response(
-                        "task_not_found",
-                        f"I couldn't find a task matching '{task_title}'. Could you be more specific?"
-                )
-
-                # If multiple matches, check for exact match
-                exact_matches = [
-                    t for t in matching_tasks
-                    if t.title.lower() == task_title.lower()
-                ]
-
-                if exact_matches:
-                    task = exact_matches[0]
-                elif len(matching_tasks) == 1:
-                    task = matching_tasks[0]
-                else:
-                    # Multiple matches, ask for clarification
-                    suggestions = ", ".join([f"'{t.title}'" for t in matching_tasks[:3]])
-                    return self._error_response(
-                        "ambiguous",
-                        f"I found {len(matching_tasks)} tasks matching that. Did you mean: {suggestions}?"
-                    )
-
-            task_id = str(task.id)
-
-            # Parse due date if provided
-            new_due_date = None
-            if new_due_date_str:
-                try:
-                    new_due_date = datetime.fromisoformat(new_due_date_str.replace('Z', '+00:00'))
-                except ValueError:
-                    logger.warning(f"Invalid due date format: {new_due_date_str}")
-                    return self._error_response(
-                        "invalid_input",
-                        f"Invalid due date format: {new_due_date_str}. Please use ISO 8601 format."
-                    )
-
-            # Update task
-            updated_task = await task_service.update_task(
-                task_id=task_id,
-                user_id=str(user_id),
-                title=new_title,
-                description=new_description,
-                due_date=new_due_date,
-                priority=new_priority
-            )
-
-            if not updated_task:
-                return self._error_response(
-                    "tool_failure",
-                    "Failed to update task"
-                )
-
-            # Build update summary
-            updates = []
-            if new_title:
-                updates.append(f"title to '{new_title}'")
-            if new_description:
-                updates.append("description")
-            if new_due_date:
-                updates.append(f"due date to {new_due_date.strftime('%Y-%m-%d')}")
-            if new_priority:
-                updates.append(f"priority to {new_priority}")
-
-            update_summary = ", ".join(updates)
-
-            logger.info(f"Updated task {task_id} for user {user_id}: {update_summary}")
-
-            return self._success_response(
-                data={
-                    "task_id": task_id,
-                    "title": updated_task.title,
-                    "description": updated_task.description,
-                    "due_date": updated_task.due_date.isoformat() if updated_task.due_date else None,
-                    "priority": updated_task.priority.value if updated_task.priority else None,
-                    "updated_at": updated_task.updated_at.isoformat() if updated_task.updated_at else None
-                },
-                message=f"Updated task '{updated_task.title}' ({update_summary})"
-            )
-
-        except Exception as e:
-            logger.error(f"Error updating task: {str(e)}", exc_info=True)
-            return self._error_response(
-                "tool_failure",
-                f"Failed to update task: {str(e)}"
-            )
-
+    return UpdateTaskOutput(
+        success=True,
+        message=f"Task '{updated_task.title}' updated successfully"
+    )

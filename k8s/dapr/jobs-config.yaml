@@ -1,0 +1,14 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: scheduler
+  namespace: default
+spec:
+  type: scheduler.alpha
+  version: v1
+  metadata:
+  - name: stateStore
+    value: "statestore"
+scopes:
+- notification
+- recurring-task

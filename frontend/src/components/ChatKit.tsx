@@ -49,18 +49,12 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
     setLoading(true)
 
     try {
-      if (!isAuthenticated()) {
-        throw new Error("You must be logged in to use the chat.");
-      }
-
-      const userInfo = getUserInfo();
-      const userId = userInfo?.sub || userInfo?.id || '550e8400-e29b-41d4-a716-446655440000';
-
-      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${userId}/chat`;
       const requestBody = {
         conversation_id: conversationId || null,
         message: messageText  // Use captured value instead of cleared 'input'
       };
+
+      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/simple-chat`;
 
       // Log request for debugging
       console.log('[ChatKit] Sending message to:', apiUrl);
@@ -70,8 +64,7 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAccessToken()}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       })

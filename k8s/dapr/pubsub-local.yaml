@@ -1,0 +1,27 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  - name: brokers
+    value: "redpanda:9092"
+  - name: consumerGroup
+    value: "{appId}"
+  - name: clientId
+    value: "{appId}"
+  - name: authType
+    value: "none"
+  - name: maxMessageBytes
+    value: "1048576"
+  - name: consumeRetryInterval
+    value: "200ms"
+scopes:
+- chat-api
+- recurring-task
+- notification
+- audit-log
+- websocket-sync

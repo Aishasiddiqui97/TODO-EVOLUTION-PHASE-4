@@ -1,181 +1,107 @@
 """
-List Tasks MCP Tool for Phase III User Story 2.
-Allows AI agent to retrieve and filter tasks through natural language.
+List Tasks MCP Tool for Event-Driven Todo Chatbot.
 
-Constitutional Requirements:
-- Tool is stateless (no in-memory state)
-- Fetches tasks from database each time
-- Returns structured result for AI agent
+Allows AI agent to retrieve and filter tasks through natural language conversation.
 """
+
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
-import logging
+from pydantic import BaseModel, Field
 
-from ..tools.base import MCPTool
-from ...services.task_service import TaskService
-from ...db import get_async_session
-
-logger = logging.getLogger(__name__)
+from ...shared.models.task import Task, TaskStatus, TaskPriority
+from ...shared.dapr_client.client import DaprClientWrapper
+from ...shared.utils.state_keys import generate_task_key
 
 
-class ListTasksTool(MCPTool):
+class ListTasksInput(BaseModel):
+    """Input parameters for list_tasks tool."""
+    userId: str
+    status: Optional[str] = Field(None, pattern="^(pending|completed)$")
+    priority: Optional[str] = Field(None, pattern="^(high|medium|low)$")
+    tags: Optional[List[str]] = None
+    limit: Optional[int] = Field(100, ge=1, le=1000)
+
+
+class ListTasksOutput(BaseModel):
+    """Output from list_tasks tool."""
+    success: bool
+    tasks: List[Dict[str, Any]]
+    count: int
+    message: str
+
+
+async def list_tasks(input_data: ListTasksInput) -> ListTasksOutput:
     """
-    MCP tool for retrieving and filtering tasks.
+    List tasks with optional filtering.
 
-    Supports filtering by status, due date, and search queries.
+    Args:
+        input_data: Task listing and filtering parameters
+
+    Returns:
+        ListTasksOutput with list of tasks
     """
+    dapr_client = DaprClientWrapper()
 
-    def get_name(self) -> str:
-        return "list_tasks"
+    # Query tasks from state store
+    # Note: Dapr State API doesn't support complex queries natively.
+    # For MVP, we'll use a simple approach with metadata query.
+    # In production, consider using Dapr Query API or a dedicated query service.
 
-    def get_description(self) -> str:
-        return """Retrieve and list tasks for the user. Use this when the user wants to see,
-        view, list, or check their tasks. Supports filtering by status (all, pending, completed),
-        due date (today, overdue), and search queries."""
+    # For now, we'll use a prefix query to get all tasks for the user
+    # This is a simplified implementation for MVP
+    prefix = f"chat-api.task.user.{input_data.userId}"
 
-    def get_parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "user_id": {
-                    "type": "integer",
-                    "description": "ID of the user"
-                },
-                "filter": {
-                    "type": "string",
-                    "enum": ["all", "pending", "completed", "today", "overdue"],
-                    "description": "Filter tasks by status or due date"
-                },
-                "search": {
-                    "type": "string",
-                    "description": "Optional search query to filter tasks by title or description"
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of tasks to return (default: 50)"
-                }
-            },
-            "required": ["user_id"]
-        }
+    # Since Dapr doesn't have a native prefix query in the basic State API,
+    # we'll need to maintain a task list index or use Query API
+    # For MVP, we'll implement a simple approach using a task index
 
-    async def execute(self, session: Any, **kwargs: Any) -> Dict[str, Any]:
-        """
-        Execute the list_tasks tool.
+    # Get task index for user
+    index_key = f"chat-api.task-index.user.{input_data.userId}"
+    task_index = await dapr_client.get_state(index_key)
 
-        Args:
-            session: Database session (shared from chat endpoint)
-            user_id: User ID (required)
-            filter: Filter type (optional)
-            search: Search query (optional)
-            limit: Maximum results (optional)
+    if not task_index:
+        return ListTasksOutput(
+            success=True,
+            tasks=[],
+            count=0,
+            message="No tasks found"
+        )
 
-        Returns:
-            Result dictionary with task list
-        """
-        try:
-            user_id = kwargs.get("user_id")
-            filter_type = kwargs.get("filter", "all")
-            search_query = kwargs.get("search")
-            limit = kwargs.get("limit", 50)
+    # Retrieve all task IDs from index
+    task_ids = task_index.get("taskIds", [])
 
-            # Validate required fields
-            if not user_id:
-                return self._error_response(
-                    "invalid_input",
-                    "User ID is required"
-                )
+    # Fetch all tasks
+    tasks = []
+    for task_id in task_ids:
+        state_key = generate_task_key(input_data.userId, task_id)
+        task_data = await dapr_client.get_state(state_key)
 
-            task_service = TaskService(session)
+        if task_data:
+            try:
+                task = Task(**task_data)
 
-            # Handle search query first
-            if search_query:
-                tasks = await task_service.search_tasks(
-                    user_id=str(user_id),
-                    query=search_query,
-                    limit=limit
-                )
-            # Handle filter types
-            elif filter_type == "pending":
-                tasks = await task_service.get_user_tasks(
-                    user_id=str(user_id),
-                    completed=False,
-                    limit=limit
-                )
-            elif filter_type == "completed":
-                tasks = await task_service.get_user_tasks(
-                    user_id=str(user_id),
-                    completed=True,
-                    limit=limit
-                )
-            elif filter_type == "today":
-                # Get all pending tasks and filter by due date
-                all_tasks = await task_service.get_user_tasks(
-                    user_id=str(user_id),
-                    completed=False,
-                    limit=limit
-                )
-                today = datetime.now().date()
-                tasks = [
-                    task for task in all_tasks
-                    if task.due_date and task.due_date.date() == today
-                ]
-            elif filter_type == "overdue":
-                # Get all pending tasks and filter by overdue
-                all_tasks = await task_service.get_user_tasks(
-                    user_id=str(user_id),
-                    completed=False,
-                    limit=limit
-                )
-                now = datetime.now()
-                tasks = [
-                    task for task in all_tasks
-                    if task.due_date and task.due_date < now
-                ]
-            else:  # "all" or default
-                tasks = await task_service.get_user_tasks(
-                    user_id=str(user_id),
-                    limit=limit
-                )
+                # Apply filters
+                if input_data.status and task.status.value != input_data.status:
+                    continue
+                if input_data.priority and task.priority.value != input_data.priority:
+                    continue
+                if input_data.tags:
+                    # Check if any of the requested tags are in the task's tags
+                    if not any(tag in task.tags for tag in input_data.tags):
+                        continue
 
-            # Format tasks for response
-            task_list = [
-                {
-                    "id": str(task.id),
-                    "title": task.title,
-                    "description": task.description,
-                    "due_date": task.due_date.isoformat() if task.due_date else None,
-                    "priority": task.priority.value if task.priority else None,
-                    "completed": task.completed,
-                    "created_at": task.created_at.isoformat() if task.created_at else None
-                }
-                for task in tasks
-            ]
+                tasks.append(task.dict())
 
-            logger.info(f"Listed {len(task_list)} tasks for user {user_id} (filter: {filter_type})")
+                # Apply limit
+                if len(tasks) >= input_data.limit:
+                    break
 
-            # Generate appropriate message
-            if len(task_list) == 0:
-                message = "You don't have any tasks"
-                if filter_type != "all":
-                    message += f" that are {filter_type}"
-                message += "."
-            else:
-                message = f"Found {len(task_list)} task{'s' if len(task_list) != 1 else ''}"
-                if filter_type != "all":
-                    message += f" ({filter_type})"
+            except Exception as e:
+                # Skip invalid tasks
+                continue
 
-            return self._success_response(
-                data={
-                    "tasks": task_list,
-                    "count": len(task_list),
-                    "filter": filter_type
-                },
-                message=message
-            )
-
-        except Exception as e:
-            logger.error(f"Error listing tasks: {str(e)}", exc_info=True)
-            return self._error_response(
-                "tool_failure",
-                f"Failed to list tasks: {str(e)}"
-            )
+    return ListTasksOutput(
+        success=True,
+        tasks=tasks,
+        count=len(tasks),
+        message=f"Found {len(tasks)} task(s)"
+    )

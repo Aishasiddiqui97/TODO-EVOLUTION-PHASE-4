@@ -1,0 +1,37 @@
+apiVersion: dapr.io/v1alpha1
+kind: Resiliency
+metadata:
+  name: default-resiliency
+  namespace: default
+spec:
+  policies:
+    retries:
+      pubsubRetry:
+        policy: exponential
+        maxInterval: 60s
+        maxRetries: 3
+      stateRetry:
+        policy: constant
+        duration: 1s
+        maxRetries: 5
+    timeouts:
+      general:
+        timeout: 30s
+      pubsub:
+        timeout: 10s
+    circuitBreakers:
+      pubsubCB:
+        maxRequests: 3
+        timeout: 30s
+        trip: consecutiveFailures >= 5
+  targets:
+    components:
+      pubsub:
+        outbound:
+          retry: pubsubRetry
+          timeout: pubsub
+          circuitBreaker: pubsubCB
+      statestore:
+        outbound:
+          retry: stateRetry
+          timeout: general

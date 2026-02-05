@@ -1,0 +1,24 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: default
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+  - name: connectionString
+    value: "host=postgres port=5432 user=todo password=todo dbname=todo_db sslmode=disable"
+  - name: tableName
+    value: "dapr_state"
+  - name: metadataTableName
+    value: "dapr_metadata"
+  - name: actorStateStore
+    value: "false"
+  - name: keyPrefix
+    value: "none"
+scopes:
+- chat-api
+- recurring-task
+- notification
+- audit-log

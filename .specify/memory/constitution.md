@@ -1,22 +1,23 @@
 <!--
 Sync Impact Report:
-- Version change: 1.1.0 → 1.2.0
+- Version change: 1.2.0 → 1.3.0
 - Modified principles: None (existing principles preserved)
-- Added sections: Phase IV: Kubernetes Deployment with AI-Only Implementation
+- Added sections: Phase V: Event-Driven Architecture with Dapr and Kubernetes
 - Removed sections: None
 - Templates requiring updates:
   ✅ constitution.md - updated
-  ⚠ plan-template.md - review for Phase IV AI-only implementation and local infrastructure constraints
-  ⚠ tasks-template.md - review for Kubernetes deployment tasks and AI tool requirements
+  ⚠ plan-template.md - review for Phase V event-driven architecture, Dapr integration, and infrastructure abstraction requirements
+  ⚠ tasks-template.md - review for Dapr component tasks, event-driven patterns, and observability requirements
+  ⚠ spec-template.md - review for event-driven user stories and Dapr-specific acceptance criteria
 - Follow-up TODOs: None
-- Rationale: MINOR version bump - added Phase IV governance rules for AI-driven Kubernetes deployment without breaking existing governance
+- Rationale: MINOR version bump - added Phase V governance rules for event-driven architecture with Dapr without breaking existing governance
 -->
 
 # Todo Evolution App Constitution
 
-**Version**: 1.2.0
+**Version**: 1.3.0
 **Ratified**: 2025-12-31
-**Last Amended**: 2026-02-03
+**Last Amended**: 2026-02-05
 
 ## Core Principles
 
@@ -192,6 +193,162 @@ The following technology choices are mandated for Phase IV:
 - Fixes MUST be implemented via AI tools, not manual intervention
 
 **Rationale**: Automated validation and rollback ensure reliability and maintain the AI-only implementation principle.
+
+---
+
+## Phase V: Event-Driven Architecture with Dapr and Kubernetes
+
+### Purpose
+
+Phase V introduces event-driven architecture using Dapr (Distributed Application Runtime) on Kubernetes. All inter-service communication transitions to asynchronous events, infrastructure concerns are abstracted through Dapr building blocks, and observability becomes a first-class requirement. This phase enforces strict Spec-Driven Development with AI-only implementation.
+
+### Core Principles
+
+#### Spec-Driven Development (SDD) Only
+
+- No code MUST be written without an approved specification
+- All features MUST follow the Spec → Plan → Tasks → Implement lifecycle
+- Specifications MUST be reviewed and approved before implementation begins
+- Implementation MUST reference specific task IDs from tasks.md
+
+**Rationale**: Spec-Driven Development ensures clarity, enables review, prevents scope creep, and creates an audit trail for all development decisions. This is critical for AI-driven implementation where specifications guide autonomous agents.
+
+#### Agentic Execution
+
+- All code MUST be written by Claude Code via Spec-KitPlus MCP
+- Human role is limited to: specification author, reviewer, validator, and auditor
+- Humans MUST NOT manually write implementation code
+- All AI prompts and outputs MUST be recorded in Prompt History Records (PHRs)
+
+**Rationale**: AI-driven implementation ensures consistency, reduces human error, and creates reproducible workflows. Human oversight focuses on high-value activities: defining requirements, reviewing designs, and validating outcomes.
+
+#### Event-Driven Architecture
+
+- All inter-service communication MUST use asynchronous events
+- Services MUST NOT make direct synchronous calls to other services
+- Events MUST be published to Dapr PubSub components
+- Services MUST subscribe to events through Dapr subscriptions
+- Event schemas MUST be versioned and documented
+
+**Rationale**: Event-driven architecture enables loose coupling, independent scaling, fault tolerance, and temporal decoupling. Services can evolve independently without breaking consumers.
+
+#### Infrastructure Abstraction
+
+- Application code MUST NOT directly use Kafka, Redis, or database SDKs
+- All infrastructure interactions MUST go through Dapr building blocks
+- State management MUST use Dapr State API
+- Secrets MUST be accessed via Dapr Secrets API
+- Service-to-service calls (when necessary) MUST use Dapr Service Invocation
+
+**Rationale**: Dapr abstraction enables portability across infrastructure providers, simplifies application code, and centralizes operational concerns like retries, timeouts, and observability.
+
+#### Environment Parity
+
+- Applications MUST behave identically on Minikube and cloud Kubernetes (AKS/GKE/OKE)
+- Dapr components MUST be configurable per environment without code changes
+- Local development MUST use the same Dapr building blocks as production
+- Infrastructure differences MUST be handled through Dapr component configuration only
+
+**Rationale**: Environment parity eliminates "works on my machine" issues, enables confident local testing, and ensures production deployments are predictable.
+
+#### Observability First
+
+- All services MUST emit structured logs
+- All services MUST expose metrics via Dapr metrics endpoint
+- All inter-service calls MUST be traced via Dapr distributed tracing
+- Logging, metrics, and tracing MUST be enabled by default, not opt-in
+- Observability configuration MUST NOT require code changes
+
+**Rationale**: Observability is essential for debugging distributed systems, understanding system behavior, and meeting operational SLOs. Making it default ensures it's never forgotten.
+
+### Architectural Constraints
+
+The following technology choices are mandated for Phase V:
+
+- **Orchestration**: Kubernetes (Minikube for local, AKS/GKE/OKE for cloud)
+- **Application Runtime**: Dapr 1.12+ with building blocks (PubSub, State, Jobs, Secrets, Service Invocation)
+- **Message Broker**: Kafka-compatible broker (Redpanda, Confluent, or Strimzi)
+- **Package Management**: Helm charts (from Phase IV, extended for Dapr)
+- **CI/CD**: GitHub Actions
+- **Observability**: Dapr-native metrics, logs, and traces (exportable to Prometheus, Grafana, Jaeger)
+
+**Rationale**: These technologies provide a complete event-driven platform with infrastructure abstraction, enabling portable, observable, and maintainable distributed applications.
+
+### Behavioral Rules
+
+#### Event Publishing
+
+- Events MUST be published with explicit topic names
+- Event payloads MUST be JSON-serializable
+- Events MUST include metadata: event type, timestamp, source service, correlation ID
+- Failed event publishing MUST be retried with exponential backoff
+- Events MUST be idempotent (safe to process multiple times)
+
+**Rationale**: Well-structured events enable reliable processing, debugging, and event replay. Idempotency prevents duplicate processing issues.
+
+#### Event Subscription
+
+- Services MUST declare subscriptions in Dapr subscription YAML
+- Subscription handlers MUST be idempotent
+- Subscription handlers MUST return success/failure status
+- Failed event processing MUST trigger Dapr retry with dead-letter queue
+- Subscriptions MUST specify message ordering requirements (if any)
+
+**Rationale**: Declarative subscriptions enable visibility into event flows. Idempotent handlers and dead-letter queues ensure reliable processing.
+
+#### State Management
+
+- State MUST be accessed via Dapr State API (not direct database calls)
+- State keys MUST follow naming conventions: `{service}.{entity}.{id}`
+- State operations MUST use optimistic concurrency (ETags) when appropriate
+- State MUST be partitioned by service (no cross-service state access)
+
+**Rationale**: Dapr State API provides consistency guarantees, caching, and portability. Service-partitioned state enforces bounded contexts.
+
+#### Secrets Management
+
+- Secrets MUST be stored in Kubernetes Secrets or external secret stores
+- Secrets MUST be accessed via Dapr Secrets API
+- Secrets MUST NOT be hardcoded in code or configuration files
+- Secrets MUST be rotated without application restarts (via Dapr)
+
+**Rationale**: Centralized secret management reduces security risks and enables secret rotation without downtime.
+
+### Forbidden Practices
+
+The following practices are explicitly prohibited in Phase V:
+
+- **Manual Coding Outside Claude Code**: All implementation code MUST be generated by AI agents
+- **Direct Kafka Clients in Services**: Application code MUST NOT import Kafka SDKs; use Dapr PubSub
+- **Hardcoded Secrets or URLs**: All configuration MUST be externalized via environment variables or Dapr configuration
+- **Skipping Spec → Plan → Tasks Lifecycle**: No feature MUST bypass the specification and planning phases
+
+**Rationale**: These prohibitions enforce the core principles and prevent common anti-patterns that undermine architecture goals.
+
+### Quality Gates
+
+All implementations MUST pass the following quality gates:
+
+- **Task Traceability**: Every commit MUST reference a Task ID from tasks.md
+- **Dapr Sidecar**: Every service MUST have a Dapr sidecar configured in Kubernetes deployment
+- **Acceptance Criteria**: Every feature MUST map to acceptance criteria defined in spec.md
+- **Observability**: Every service MUST emit logs, metrics, and traces via Dapr
+- **Event Schema**: Every published event MUST have a documented schema
+
+**Rationale**: Quality gates ensure compliance with architectural principles and enable automated validation in CI/CD pipelines.
+
+### Hierarchy Rule
+
+In case of conflicts, the following hierarchy applies:
+
+**Constitution > Specification > Plan > Tasks > Implementation**
+
+- Constitution principles override all other documents
+- Specifications override plans and tasks
+- Plans override tasks
+- Tasks override implementation details
+
+**Rationale**: Clear hierarchy prevents ambiguity and ensures architectural principles are never compromised for implementation convenience.
 
 ---
 
