@@ -3,8 +3,10 @@ Update Task MCP Tool for Event-Driven Todo Chatbot.
 
 Allows AI agent to update task properties through natural language conversation.
 Supports updating recurrence patterns with natural language parsing.
+Automatically reschedules reminders when due dates change.
 """
 
+import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Union
 from pydantic import BaseModel, Field
@@ -15,6 +17,9 @@ from ...shared.events.publisher import EventPublisher
 from ...shared.utils.state_keys import generate_task_key
 from ...shared.utils.recurrence_parser import parse_recurrence_pattern, validate_recurrence_pattern, RecurrenceParserError
 from ...shared.utils.recurrence_calculator import get_recurrence_summary
+from ...services.chat_api.services.reminder_service import ReminderService
+
+logger = logging.getLogger(__name__)
 
 
 class UpdateTaskInput(BaseModel):
@@ -139,6 +144,31 @@ async def update_task(input_data: UpdateTaskInput) -> UpdateTaskOutput:
             "updatedFields": list(update_fields.keys())
         }
     )
+
+    # Reschedule reminders if due date/time changed (T078)
+    if ("dueDate" in update_fields or "dueTime" in update_fields) and updated_task.dueDate:
+        try:
+            reminder_service = ReminderService()
+            due_datetime = reminder_service.parse_due_datetime(
+                updated_task.dueDate,
+                updated_task.dueTime or "09:00"
+            )
+
+            if due_datetime:
+                reminder_result = await reminder_service.reschedule_reminders(
+                    task_id=input_data.taskId,
+                    user_id=input_data.userId,
+                    new_due_datetime=due_datetime,
+                    task_title=updated_task.title
+                )
+
+                if reminder_result["success"]:
+                    logger.info(f"Rescheduled reminders for task {input_data.taskId}")
+                else:
+                    logger.warning(f"Failed to reschedule reminders: {reminder_result['message']}")
+        except Exception as e:
+            # Don't fail task update if reminder rescheduling fails
+            logger.error(f"Error rescheduling reminders: {e}", exc_info=True)
 
     # Build success message
     if recurrence_summary:

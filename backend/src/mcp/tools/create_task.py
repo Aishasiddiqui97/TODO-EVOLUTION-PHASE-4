@@ -3,9 +3,11 @@ Create Task MCP Tool for Event-Driven Todo Chatbot.
 
 Allows AI agent to create tasks through natural language conversation.
 Supports recurring tasks with natural language pattern parsing.
+Automatically schedules reminders for tasks with due dates.
 """
 
 import uuid
+import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Union
 from pydantic import BaseModel, Field
@@ -16,6 +18,9 @@ from ...shared.events.publisher import EventPublisher
 from ...shared.utils.state_keys import generate_task_key
 from ...shared.utils.recurrence_parser import parse_recurrence_pattern, validate_recurrence_pattern, RecurrenceParserError
 from ...shared.utils.recurrence_calculator import get_recurrence_summary
+from ...services.chat_api.services.reminder_service import ReminderService
+
+logger = logging.getLogger(__name__)
 
 
 class CreateTaskInput(BaseModel):
@@ -139,6 +144,31 @@ async def create_task(input_data: CreateTaskInput) -> CreateTaskOutput:
         user_id=input_data.userId,
         payload={"task": task.dict()}
     )
+
+    # Schedule reminders if task has due date (T077)
+    if input_data.dueDate:
+        try:
+            reminder_service = ReminderService()
+            due_datetime = reminder_service.parse_due_datetime(
+                input_data.dueDate,
+                input_data.dueTime or "09:00"
+            )
+
+            if due_datetime:
+                reminder_result = await reminder_service.schedule_reminder(
+                    task_id=task_id,
+                    user_id=input_data.userId,
+                    due_datetime=due_datetime,
+                    task_title=input_data.title
+                )
+
+                if reminder_result["success"]:
+                    logger.info(f"Scheduled reminders for task {task_id}")
+                else:
+                    logger.warning(f"Failed to schedule reminders: {reminder_result['message']}")
+        except Exception as e:
+            # Don't fail task creation if reminder scheduling fails
+            logger.error(f"Error scheduling reminders: {e}", exc_info=True)
 
     # Build success message
     if recurrence_summary:
