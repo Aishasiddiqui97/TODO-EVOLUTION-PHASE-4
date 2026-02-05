@@ -2,16 +2,19 @@
 Update Task MCP Tool for Event-Driven Todo Chatbot.
 
 Allows AI agent to update task properties through natural language conversation.
+Supports updating recurrence patterns with natural language parsing.
 """
 
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from pydantic import BaseModel, Field
 
-from ...shared.models.task import Task, TaskPriority, TaskStatus
+from ...shared.models.task import Task, TaskPriority, TaskStatus, RecurrencePattern
 from ...shared.dapr_client.client import DaprClientWrapper
 from ...shared.events.publisher import EventPublisher
 from ...shared.utils.state_keys import generate_task_key
+from ...shared.utils.recurrence_parser import parse_recurrence_pattern, validate_recurrence_pattern, RecurrenceParserError
+from ...shared.utils.recurrence_calculator import get_recurrence_summary
 
 
 class UpdateTaskInput(BaseModel):
@@ -24,6 +27,10 @@ class UpdateTaskInput(BaseModel):
     dueDate: Optional[str] = None
     dueTime: Optional[str] = None
     tags: Optional[List[str]] = None
+    recurrencePattern: Optional[Union[str, Dict[str, Any], bool]] = Field(
+        None,
+        description="Recurrence pattern as natural language, structured dict, or False to remove recurrence"
+    )
 
 
 class UpdateTaskOutput(BaseModel):
@@ -34,7 +41,12 @@ class UpdateTaskOutput(BaseModel):
 
 async def update_task(input_data: UpdateTaskInput) -> UpdateTaskOutput:
     """
-    Update an existing task.
+    Update an existing task with optional recurrence pattern updates.
+
+    Supports:
+    - Updating task properties (title, description, priority, etc.)
+    - Adding/updating recurrence patterns with natural language
+    - Removing recurrence patterns (set recurrencePattern to False)
 
     Args:
         input_data: Task update parameters
@@ -60,6 +72,8 @@ async def update_task(input_data: UpdateTaskInput) -> UpdateTaskOutput:
 
     # Update only provided fields
     update_fields = {}
+    recurrence_summary = None
+
     if input_data.title is not None:
         update_fields["title"] = input_data.title
     if input_data.description is not None:
@@ -72,6 +86,37 @@ async def update_task(input_data: UpdateTaskInput) -> UpdateTaskOutput:
         update_fields["dueTime"] = input_data.dueTime
     if input_data.tags is not None:
         update_fields["tags"] = input_data.tags
+
+    # Handle recurrence pattern updates
+    if input_data.recurrencePattern is not None:
+        if input_data.recurrencePattern is False:
+            # Remove recurrence pattern
+            update_fields["recurrencePattern"] = None
+            recurrence_summary = "Recurrence removed"
+        else:
+            try:
+                if isinstance(input_data.recurrencePattern, str):
+                    # Parse natural language pattern
+                    parsed_pattern = parse_recurrence_pattern(input_data.recurrencePattern)
+                    validate_recurrence_pattern(parsed_pattern)
+                    update_fields["recurrencePattern"] = parsed_pattern.dict()
+                    recurrence_summary = get_recurrence_summary(parsed_pattern)
+                elif isinstance(input_data.recurrencePattern, dict):
+                    # Validate structured pattern
+                    pattern_obj = RecurrencePattern(**input_data.recurrencePattern)
+                    validate_recurrence_pattern(pattern_obj)
+                    update_fields["recurrencePattern"] = pattern_obj.dict()
+                    recurrence_summary = get_recurrence_summary(pattern_obj)
+            except RecurrenceParserError as e:
+                return UpdateTaskOutput(
+                    success=False,
+                    message=f"Invalid recurrence pattern: {str(e)}"
+                )
+            except Exception as e:
+                return UpdateTaskOutput(
+                    success=False,
+                    message=f"Error parsing recurrence pattern: {str(e)}"
+                )
 
     # Apply updates
     updated_task_data = task.dict()
@@ -95,7 +140,13 @@ async def update_task(input_data: UpdateTaskInput) -> UpdateTaskOutput:
         }
     )
 
+    # Build success message
+    if recurrence_summary:
+        message = f"Task '{updated_task.title}' updated successfully. {recurrence_summary}"
+    else:
+        message = f"Task '{updated_task.title}' updated successfully"
+
     return UpdateTaskOutput(
         success=True,
-        message=f"Task '{updated_task.title}' updated successfully"
+        message=message
     )

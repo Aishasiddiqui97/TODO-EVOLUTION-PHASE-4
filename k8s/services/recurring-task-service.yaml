@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: recurring-task
+  labels:
+    app: recurring-task
+    service: recurring-task
+spec:
+  type: ClusterIP
+  selector:
+    app: recurring-task
+  ports:
+  - name: http
+    port: 8002
+    targetPort: 8002
+    protocol: TCP
+  - name: dapr-http
+    port: 3500
+    targetPort: 3500
+    protocol: TCP
+  - name: dapr-grpc
+    port: 50001
+    targetPort: 50001
+    protocol: TCP
