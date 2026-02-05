@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: websocket-sync
+  labels:
+    app: websocket-sync
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: websocket-sync
+  template:
+    metadata:
+      labels:
+        app: websocket-sync
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "websocket-sync"
+        dapr.io/app-port: "8004"
+        dapr.io/log-level: "info"
+    spec:
+      containers:
+      - name: websocket-sync
+        image: todo-chatbot/websocket-sync:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8004
+          name: http
+        env:
+        - name: DAPR_HTTP_PORT
+          value: "3500"
+        - name: DAPR_GRPC_PORT
+          value: "50001"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8004
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8004
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

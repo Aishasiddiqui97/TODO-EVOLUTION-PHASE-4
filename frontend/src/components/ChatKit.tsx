@@ -1,12 +1,13 @@
 /**
  * Chat interface component for Phase III.
- * Provides a conversational UI for task management.
+ * Provides a conversational UI for task management with real-time sync.
  */
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { MessageRenderer } from './MessageRenderer'
 import { getAccessToken, getUserInfo, isAuthenticated } from '@/lib/auth'
+import { getWebSocketClient, disconnectWebSocket, WebSocketMessage, ConnectionStatus } from '@/services/websocket'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -23,7 +24,14 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [wsStatus, setWsStatus] = useState<ConnectionStatus>({
+    connected: false,
+    currentSequence: 0,
+    reconnecting: false
+  })
+  const [notifications, setNotifications] = useState<string[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const wsClientRef = useRef<ReturnType<typeof getWebSocketClient> | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -32,6 +40,90 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    // Get user ID (using temp user for now)
+    const userId = 'user-001' // TODO: Get from auth context
+
+    // Create WebSocket client
+    const wsClient = getWebSocketClient(userId)
+    wsClientRef.current = wsClient
+
+    // Register status change handler
+    const handleStatusChange = (status: ConnectionStatus) => {
+      setWsStatus(status)
+
+      if (status.connected && !status.reconnecting) {
+        addNotification('✅ Connected to real-time sync')
+      } else if (status.reconnecting) {
+        addNotification('🔄 Reconnecting...')
+      } else if (status.error) {
+        addNotification(`❌ Connection error: ${status.error}`)
+      }
+    }
+
+    wsClient.onStatusChange(handleStatusChange)
+
+    // Register message handlers
+    const handleTaskCreated = (message: WebSocketMessage) => {
+      const task = message.data
+      addNotification(`✨ New task created: ${task?.title || 'Untitled'}`)
+    }
+
+    const handleTaskUpdated = (message: WebSocketMessage) => {
+      const task = message.data
+      addNotification(`📝 Task updated: ${task?.title || 'Untitled'}`)
+    }
+
+    const handleTaskCompleted = (message: WebSocketMessage) => {
+      const task = message.data
+      addNotification(`✅ Task completed: ${task?.title || 'Untitled'}`)
+    }
+
+    const handleTaskDeleted = (message: WebSocketMessage) => {
+      const taskId = message.taskId
+      addNotification(`🗑️ Task deleted`)
+    }
+
+    const handleSyncComplete = (message: WebSocketMessage) => {
+      const data = message.data || {}
+      addNotification(`🔄 Sync complete: ${data.taskCount || 0} tasks`)
+    }
+
+    wsClient.on('task.created', handleTaskCreated)
+    wsClient.on('task.updated', handleTaskUpdated)
+    wsClient.on('task.completed', handleTaskCompleted)
+    wsClient.on('task.deleted', handleTaskDeleted)
+    wsClient.on('sync.complete', handleSyncComplete)
+
+    // Connect
+    wsClient.connect()
+
+    // Cleanup on unmount
+    return () => {
+      wsClient.off('task.created', handleTaskCreated)
+      wsClient.off('task.updated', handleTaskUpdated)
+      wsClient.off('task.completed', handleTaskCompleted)
+      wsClient.off('task.deleted', handleTaskDeleted)
+      wsClient.off('sync.complete', handleSyncComplete)
+      wsClient.offStatusChange(handleStatusChange)
+      disconnectWebSocket()
+    }
+  }, [])
+
+  const addNotification = (message: string) => {
+    setNotifications(prev => [...prev, message])
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n !== message))
+    }, 5000)
+  }
+
+  const dismissNotification = (index: number) => {
+    setNotifications(prev => prev.filter((_, i) => i !== index))
+  }
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return
@@ -138,16 +230,92 @@ export function ChatKit({ conversationId, onConversationChange }: ChatKitProps) 
         backdropFilter: 'blur(10px)',
         borderBottom: '2px solid #00f5ff'
       }}>
-        <h1 style={{
-          fontSize: '24px',
-          background: 'linear-gradient(90deg, #00f5ff 0%, #a855f7 50%, #ff006e 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          margin: 0
-        }}>
-          Todo AI Chatbot
-        </h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 style={{
+            fontSize: '24px',
+            background: 'linear-gradient(90deg, #00f5ff 0%, #a855f7 50%, #ff006e 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            margin: 0
+          }}>
+            Todo AI Chatbot
+          </h1>
+
+          {/* WebSocket Status Indicator */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 12px',
+            background: wsStatus.connected
+              ? 'rgba(0, 245, 255, 0.1)'
+              : wsStatus.reconnecting
+              ? 'rgba(255, 165, 0, 0.1)'
+              : 'rgba(255, 0, 110, 0.1)',
+            border: `1px solid ${wsStatus.connected ? '#00f5ff' : wsStatus.reconnecting ? '#ffa500' : '#ff006e'}`,
+            borderRadius: '8px',
+            fontSize: '12px',
+            color: wsStatus.connected ? '#00f5ff' : wsStatus.reconnecting ? '#ffa500' : '#ff006e'
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: wsStatus.connected ? '#00f5ff' : wsStatus.reconnecting ? '#ffa500' : '#ff006e',
+              animation: wsStatus.reconnecting ? 'pulse 1.5s infinite' : 'none'
+            }} />
+            {wsStatus.connected ? 'Live' : wsStatus.reconnecting ? 'Reconnecting' : 'Offline'}
+          </div>
+        </div>
       </div>
+
+      {/* Notifications */}
+      {notifications.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '80px',
+          right: '20px',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          maxWidth: '300px'
+        }}>
+          {notifications.map((notification, index) => (
+            <div
+              key={index}
+              style={{
+                padding: '12px 16px',
+                background: 'rgba(0, 0, 0, 0.9)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid #00f5ff',
+                borderRadius: '8px',
+                color: '#fff',
+                fontSize: '14px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                animation: 'slideIn 0.3s ease-out'
+              }}
+            >
+              <span>{notification}</span>
+              <button
+                onClick={() => dismissNotification(index)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#888',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '0 0 0 8px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Messages */}
       <div style={{
